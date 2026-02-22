@@ -1,0 +1,103 @@
+from flask import Flask, request, jsonify
+import json
+import logging
+from config import Config
+from handlers.message_handler import MessageHandler
+from utils.telegram_api import TelegramAPI
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Создание Flask приложения
+app = Flask(__name__)
+app.config.from_object(Config)
+
+# Инициализация компонентов
+telegram_api = TelegramAPI(app.config['BOT_TOKEN'])
+message_handler = MessageHandler(telegram_api)
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    """
+    Главный webhook обработчик для получения обновлений от Telegram
+    """
+    try:
+        # Получение JSON данных из запроса
+        update = request.get_json()
+        
+        if not update:
+            logger.warning("Получен пустой запрос")
+            return jsonify({'status': 'error', 'message': 'No data received'}), 400
+        
+        logger.info(f"Получено обновление: {json.dumps(update, ensure_ascii=False, indent=2)}")
+        
+        # Обработка входящего сообщения
+        result = message_handler.handle_update(update)
+        
+        if result:
+            return jsonify({'status': 'ok'}), 200
+        else:
+            return jsonify({'status': 'error', 'message': 'Failed to process update'}), 500
+            
+    except Exception as e:
+        logger.error(f"Ошибка обработки webhook: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    """
+    Проверка состояния приложения
+    """
+    return jsonify({
+        'status': 'healthy',
+        'bot_token_set': bool(app.config.get('BOT_TOKEN')),
+        'webhook_url': app.config.get('WEBHOOK_URL')
+    })
+
+@app.route('/admin')
+def admin_panel():
+    """
+    Простая админ панель для управления ботом
+    """
+    return render_template('admin.html')
+
+@app.route('/set_webhook', methods=['POST'])
+def set_webhook():
+    """
+    Установка webhook URL для бота
+    """
+    try:
+        webhook_url = app.config['WEBHOOK_URL']
+        result = telegram_api.set_webhook(webhook_url)
+        
+        if result:
+            return jsonify({'status': 'success', 'message': f'Webhook установлен: {webhook_url}'})
+        else:
+            return jsonify({'status': 'error', 'message': 'Не удалось установить webhook'})
+            
+    except Exception as e:
+        logger.error(f"Ошибка установки webhook: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)})
+
+@app.route('/')
+def index():
+    """
+    Главная страница
+    """
+    return jsonify({
+        'message': 'Telegram Casino Bot Server',
+        'status': 'running',
+        'endpoints': {
+            'webhook': '/webhook (POST)',
+            'health': '/health (GET)',
+            'admin': '/admin (GET)',
+            'set_webhook': '/set_webhook (POST)'
+        }
+    })
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=app.config['DEBUG'])
