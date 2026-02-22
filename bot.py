@@ -113,27 +113,25 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
             "⚠️ Произошла ошибка. Попробуйте позже."
         )
 
-def main() -> None:
+async def main() -> None:
     """Основная функция запуска бота"""
     # Создаем приложение
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # Добавляем обработчики
+    # Добавляем обработчики команд
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
+    
+    # Добавляем обработчик текстовых сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    
+    # Добавляем обработчик кнопок
     application.add_handler(CallbackQueryHandler(button_callback))
     
     # Добавляем обработчик ошибок
     application.add_error_handler(error_handler)
     
-    # Запускаем бота с webhook для Render
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        webhook_url=f"https://{os.getenv('RENDER_EXTERNAL_URL', 'your-app-name.onrender.com')}/{BOT_TOKEN}",
-        url_path=BOT_TOKEN
-    )
-
-if __name__ == '__main__':
-    main()
+    print("🎰 NeCasino Bot запущен!")
+    
+    # Запускаем поллинг вместо webhook для простоты
+    await application.run_polling(drop_pending_updates=True)
