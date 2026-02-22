@@ -49,3 +49,5 @@ class CasinoHandler:
 Пишите @support_casino"""
         
         return send_message(chat_id, message)
+def register_casino_handlers(dp):
+    dp.include_router(router)
